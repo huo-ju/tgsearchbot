@@ -22,6 +22,7 @@ func TGBotCommand(tgservice *service.Telegram, cypressapi *cypress.API, message 
         outputresult := FormatSearchResult(result)
 	    replymsg := tgbotapi.NewMessage(message.Chat.ID, outputresult)
 	    replymsg.ReplyToMessageID = message.MessageID
+            replymsg.ParseMode = "MarkdownV2"
 	    tgservice.Bot.Send(replymsg)
     }
 }
