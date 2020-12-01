@@ -22,7 +22,7 @@ func TGBotCommand(tgservice *service.Telegram, cypressapi *cypress.API, message 
         outputresult := FormatSearchResult(result)
 	    replymsg := tgbotapi.NewMessage(message.Chat.ID, outputresult)
 	    replymsg.ReplyToMessageID = message.MessageID
-            replymsg.ParseMode = "MarkdownV2"
+        replymsg.ParseMode = "HTML"
 	    tgservice.Bot.Send(replymsg)
     }
 }
@@ -41,9 +41,20 @@ func FormatSearchResult(result *cypress.Result) string {
             humanTimestr = t.Format("2006-01-02 15:04:05")
         }
 
-        title := strings.Replace(item.Title, "<span class='yx_hl'>", "/", -1)
-        title = strings.Replace(title, "</span>", "/", -1)
-        itemstr := fmt.Sprintf("%d. %s [%s] - %s %s \n", idx, title, item.UserName, humanTimestr, item.URI)
+        title := strings.Replace(item.Title, "<span class='yx_hl'>", "<b>", -1)
+        title = strings.Replace(title, "</span>", "</b>", -1)
+
+        tagline := ""
+        if len(item.UserName) > 0 {
+            tagline += "["+ item.UserName +"]"
+        }
+        if len(item.URI) > 0 {
+            tagline += fmt.Sprintf(" - <a href=\"%s\">%s</a>", item.URI, humanTimestr)
+        } else {
+            tagline += " - " + humanTimestr
+        }
+
+        itemstr := fmt.Sprintf("%d. %s %s \n", idx, title, tagline)
         builder.WriteString(itemstr)
     }
 
