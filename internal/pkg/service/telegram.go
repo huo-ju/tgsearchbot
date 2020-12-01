@@ -1,7 +1,7 @@
 package service
 
 import (
-    "fmt"
+	"github.com/golang/glog"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
@@ -11,6 +11,7 @@ type Telegram struct {
     Bot *tgbotapi.BotAPI
 }
 
+// NewTelegramService create a service.Telegram instance
 func NewTelegramService(botToken string) (*Telegram, error){
 	bot, err := tgbotapi.NewBotAPI(botToken)
     if err !=nil {
@@ -21,12 +22,12 @@ func NewTelegramService(botToken string) (*Telegram, error){
 
 // Startpolling polling Message from Telegram 
 func (tg *Telegram) Startpolling(ch chan interface{}) {
-    fmt.Println("startpolling from tgbot")
+	glog.Infof("Startpolling from telegram...")
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates, err := tg.Bot.GetUpdatesChan(u)
     if err!=nil {
-        fmt.Println(err)
+	    glog.Errorf("Telegram GetUpdates error: %v\n", err)
     }
 	for update := range updates {
 		if update.Message != nil {
