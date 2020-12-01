@@ -53,6 +53,7 @@ func readInputMessageChannel(ch chan interface{}) {
 
 func main() {
 	flag.Parse()
+	glog.V(2).Infof("Service Start...")
 	loadconf()
     cypressapi = &cypress.API{Endpoint: searchAPIEndPoint,TermMustMode: termMustMode }
 
