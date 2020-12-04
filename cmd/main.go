@@ -18,6 +18,7 @@ var (
 	botToken string
     searchAPIEndPoint string
     termMustMode bool
+    deleteAfterSecond int
     cypressapi *cypress.API
     tgservice *service.Telegram
 )
@@ -31,7 +32,7 @@ func loadconf() {
 	botToken = viper.GetString("BOT_TOKEN")
 	searchAPIEndPoint = viper.GetString("SEARCHAPI_ENDPOINT")
 	termMustMode = viper.GetBool("TERM_MUST_MODE")
-
+	deleteAfterSecond = viper.GetInt("DELETE_AFTER_SECOND")
 }
 
 func readInputMessageChannel(ch chan interface{}) {
@@ -40,7 +41,7 @@ func readInputMessageChannel(ch chan interface{}) {
         switch p := p.(type) {
             case tgbotapi.Message:
 				if strings.HasPrefix(p.Text, "/") == true { //It's a bot command
-                    go worker.TGBotCommand(tgservice, cypressapi, &p)
+                    go worker.TGBotCommand(tgservice, &worker.TGBotCommandConf{DeleteAfterSeconds: deleteAfterSecond}, cypressapi, &p)
                 } else {
                     doc := cypress.TelegramMessageToDocument(&p)
                     go cypressapi.Update(doc)

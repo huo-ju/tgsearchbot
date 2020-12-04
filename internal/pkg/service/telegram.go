@@ -31,6 +31,7 @@ func (tg *Telegram) Startpolling(ch chan interface{}) {
     }
 	for update := range updates {
 		if update.Message != nil {
+            glog.V(3).Infof("Telegram receive msg: %v", update.Message)
 			if update.Message.Text != "" {
 		        ch <- *update.Message
             }
