@@ -90,9 +90,8 @@ func (api *API) Search(querystring string, chatID int64) (*Result, error){
             }
         }
     }
-    //TOFIX: for debug
-    //tenantid := TGChatID2TanantID(chatID)
-    //queryparams[2]= "cy_tenantid=" + tenantid
+    tenantid := TGChatID2TanantID(chatID)
+    queryparams[2]= "cy_tenantid=" + tenantid
 
     var finalqueryparams []string
     for _, str := range queryparams {
