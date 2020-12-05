@@ -51,7 +51,7 @@ func TGBotCommand(tgservice *service.Telegram, conf *TGBotCommandConf, cypressap
 	        glog.Errorf("Telegram Send message error: %v\n", err)
         } else {
             glog.V(3).Infof("Start the delete timer : %d on chatID %d MessageId %d", conf.DeleteAfterSeconds, msg.Chat.ID, msg.MessageID)
-            TimerDeleteMessage(10, func(){deleteMessage(tgservice, msg.Chat.ID, msg.MessageID)})
+            TimerDeleteMessage(conf.DeleteAfterSeconds, func(){deleteMessage(tgservice, msg.Chat.ID, msg.MessageID)})
         }
     }
 }
