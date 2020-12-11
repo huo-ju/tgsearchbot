@@ -2,9 +2,7 @@ package cypress
 import (
     "fmt"
     "net/http"
-	"net/url"
     "strconv"
-    "regexp"
     "strings"
     "errors"
     "encoding/json"
@@ -24,6 +22,15 @@ const (
 type API struct {
     Endpoint string
     TermMustMode bool
+}
+
+type SearchClause struct {
+    Queryword string
+    Conf string
+    Start int
+    Num int
+    Restrict *map[string]string
+    Params *map[string]string
 }
 
 // SearchResult is the Cypress Search result top node
@@ -72,38 +79,31 @@ func (api *API) Update(doc *ChatDocument) {
 	glog.V(2).Infof("post result : %v", result)
 }
 
-// Search : request the search result from cypress serach API
-func (api *API) Search(querystring string, chatID int64) (*Result, error){
-    queryparams := make([]string, 3)
-    querycmds := strings.Split(querystring, " ")
-    queryparams[0]= "q=" + url.QueryEscape(strings.Trim(querystring, " "))
-    if len(querycmds)>0 {
-        match, _ := regexp.MatchString("uid:[0-9]+\\s*", querycmds[0])
-        if match == true {
-            queryparams[0]= "q=" + url.QueryEscape(strings.Trim(querystring[len(querycmds[0]):]," "))
-            queryparams[1]= "userid=" + url.QueryEscape(strings.Trim(querycmds[0][4:], " "))
-        } else {
-            match, _ := regexp.MatchString("name:[0-9a-zA-Z]+\\s*", querycmds[0])
-            if match == true {
-                queryparams[0]= "q=" + url.QueryEscape(strings.Trim(querystring[len(querycmds[0]):]," "))
-                queryparams[1]= "username=" + url.QueryEscape(strings.Trim(querycmds[0][5:], " "))
-            }
-        }
-    }
-    tenantid := TGChatID2TanantID(chatID)
-    queryparams[2]= "cy_tenantid=" + tenantid
 
-    var finalqueryparams []string
-    for _, str := range queryparams {
-        if str != "" {
-            finalqueryparams = append(finalqueryparams, str)
-        }
+// SearchWithClause : request the search result from cypress serach API
+func (api *API) SearchWithClause(searchclause *SearchClause, chatID int64) (*Result, error){
+
+    urlbuilder := strings.Builder{}
+    urlbuilder.WriteString(fmt.Sprintf("%s/search?q=%s",api.Endpoint, searchclause.Queryword))
+    for k, v := range *searchclause.Restrict{
+        urlbuilder.WriteString(fmt.Sprintf("&%s=%s",k,v))
+    }
+
+    for k, v := range *searchclause.Params{
+        urlbuilder.WriteString(fmt.Sprintf("&%s=%s",k,v))
+    }
+
+    urlbuilder.WriteString(fmt.Sprintf("&start=%d", searchclause.Start))
+    urlbuilder.WriteString(fmt.Sprintf("&num=%d", searchclause.Num))
+
+    if searchclause.Conf != "" {
+        urlbuilder.WriteString(fmt.Sprintf("&c=%s", searchclause.Conf))
     }
     if api.TermMustMode == true{
-        finalqueryparams = append(finalqueryparams, "cy_termmust=true")
+        urlbuilder.WriteString("&cy_termmust=true")
     }
 
-    apiRequestURL := fmt.Sprintf("%s/search?%s",api.Endpoint, strings.Join(finalqueryparams[:], "&"))
+    apiRequestURL := urlbuilder.String()
 	glog.V(1).Infof("Request cypress : %s", apiRequestURL)
 	body, err := httpGet(apiRequestURL)
     if err != nil {
