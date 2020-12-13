@@ -7,6 +7,7 @@ import (
     "errors"
     "encoding/json"
     "io/ioutil"
+    "net/url"
 	"bytes"
 	"encoding/xml"
 	"github.com/golang/glog"
@@ -84,7 +85,7 @@ func (api *API) Update(doc *ChatDocument) {
 func (api *API) SearchWithClause(searchclause *SearchClause, chatID int64) (*Result, error){
 
     urlbuilder := strings.Builder{}
-    urlbuilder.WriteString(fmt.Sprintf("%s/search?q=%s",api.Endpoint, searchclause.Queryword))
+    urlbuilder.WriteString(fmt.Sprintf("%s/search?q=%s",api.Endpoint, url.QueryEscape(strings.Trim(searchclause.Queryword, " "))))
     for k, v := range *searchclause.Restrict{
         urlbuilder.WriteString(fmt.Sprintf("&%s=%s",k,v))
     }
