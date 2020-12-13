@@ -97,15 +97,20 @@ func (botcmdworker *BotCmdWorker) TGBotButtonQuery(tgservice *service.Telegram, 
             case "P":
                     start,_ := strconv.Atoi(callbackcmd[1])
                     fromID,_ := strconv.Atoi(callbackcmd[2])
-                    if queryFromID == fromID {
-                        botcmdworker.ResetTimer(query.Message.MessageID, query.Message.Chat.ID, conf.DeleteAfterSeconds)
-                        editmsg := botcmdworker.runSearchWithPaging(query.Message.Chat.ID, query.Message.MessageID, fromID, start, cypressapi)
-                        if editmsg != nil {
-					        tgservice.Bot.Send(editmsg)
+
+                    go func(){
+                        if queryFromID == fromID {
+                                botcmdworker.ResetTimer(query.Message.MessageID, query.Message.Chat.ID, conf.DeleteAfterSeconds)
+                                editmsg := botcmdworker.runSearchWithPaging(query.Message.Chat.ID, query.Message.MessageID, fromID, start, cypressapi)
+                                if editmsg != nil {
+					                tgservice.Bot.Send(editmsg)
+                                }
                         } else {
+                            alert := tgbotapi.NewCallbackWithAlert(query.ID, "It's not your search result.")
+					        tgservice.Bot.AnswerCallbackQuery(alert)
 				            glog.V(2).Infof("Other users %d click the button, ignore.", queryFromID)
                         }
-                    }
+                    }()
             default:
 				glog.V(2).Infof("Unknown Query: %v", query)
         }
