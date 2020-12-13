@@ -19,8 +19,10 @@ var (
     searchAPIEndPoint string
     termMustMode bool
     deleteAfterSecond int
+    resultPerPage int
     cypressapi *cypress.API
     tgservice *service.Telegram
+    botcmdworker *worker.BotCmdWorker
 )
 
 func loadconf() {
@@ -33,6 +35,7 @@ func loadconf() {
 	searchAPIEndPoint = viper.GetString("SEARCHAPI_ENDPOINT")
 	termMustMode = viper.GetBool("TERM_MUST_MODE")
 	deleteAfterSecond = viper.GetInt("DELETE_AFTER_SECOND")
+	resultPerPage = viper.GetInt("RESULT_PERPAGE")
 }
 
 func readInputMessageChannel(ch chan interface{}) {
@@ -41,11 +44,13 @@ func readInputMessageChannel(ch chan interface{}) {
         switch p := p.(type) {
             case tgbotapi.Message:
 				if strings.HasPrefix(p.Text, "/") == true { //It's a bot command
-                    go worker.TGBotCommand(tgservice, &worker.TGBotCommandConf{DeleteAfterSeconds: deleteAfterSecond}, cypressapi, &p)
+                    go botcmdworker.TGBotCommand(tgservice, &worker.TGBotCommandConf{DeleteAfterSeconds: deleteAfterSecond, ResultPerPage:resultPerPage }, cypressapi, &p)
                 } else {
                     doc := cypress.TelegramMessageToDocument(&p)
                     go cypressapi.Update(doc)
                 }
+            case tgbotapi.CallbackQuery:
+                go botcmdworker.TGBotButtonQuery(tgservice, &worker.TGBotCommandConf{DeleteAfterSeconds: deleteAfterSecond, ResultPerPage:resultPerPage }, cypressapi, &p)
             default:
 				glog.V(2).Infof("received: %v", p)
         }
@@ -57,7 +62,7 @@ func main() {
 	glog.V(2).Infof("Service Start...")
 	loadconf()
     cypressapi = &cypress.API{Endpoint: searchAPIEndPoint,TermMustMode: termMustMode }
-
+    botcmdworker = worker.NewBotCmdWorker()
     var err error
     tgservice,err = service.NewTelegramService(botToken)
     if err != nil {

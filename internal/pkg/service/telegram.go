@@ -30,6 +30,12 @@ func (tg *Telegram) Startpolling(ch chan interface{}) {
 	    glog.Errorf("Telegram GetUpdates error: %v\n", err)
     }
 	for update := range updates {
+		if update.CallbackQuery != nil {
+            glog.V(3).Infof("Telegram receive callback query: %v", update.CallbackQuery)
+			if update.CallbackQuery.Data != "" {
+		        ch <- *update.CallbackQuery
+            }
+        }
 		if update.Message != nil {
             glog.V(3).Infof("Telegram receive msg: %v", update.Message)
 			if update.Message.Text != "" {

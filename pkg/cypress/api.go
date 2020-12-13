@@ -25,12 +25,12 @@ type API struct {
 }
 
 type SearchClause struct {
-    Queryword string
-    Conf string
-    Start int
-    Num int
-    Restrict *map[string]string
-    Params *map[string]string
+    Queryword string `json:"q"`
+    Conf string `json:"c"`
+    Start int `json:"s"`
+    Num int `json:"n"`
+    Restrict *map[string]string `json:"r"`
+    Params *map[string]string `json:"p"`
 }
 
 // SearchResult is the Cypress Search result top node

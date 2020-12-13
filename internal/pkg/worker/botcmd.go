@@ -6,6 +6,8 @@ import (
     "strconv"
     "regexp"
 	"net/url"
+    //"encoding/json"
+    //"encoding/base64"
     "time"
     "math"
 	"github.com/golang/glog"
@@ -14,6 +16,16 @@ import (
 	"github.com/virushuo/tgsearchbot/pkg/cypress"
 )
 
+// BotCmd worker struct
+type BotCmdWorker struct {
+    //BotToken string
+    QueryCache map[string] *cypress.SearchClause
+}
+
+func NewBotCmdWorker() *BotCmdWorker{
+    cache := make(map[string] *cypress.SearchClause)
+    return &BotCmdWorker{QueryCache:cache}
+}
 
 // TimerDeleteMessage will call the function f after n seconds
 func TimerDeleteMessage(n int, f func()) (*time.Timer){
@@ -39,34 +51,39 @@ type TGBotCommandConf struct {
     ResultPerPage int
 }
 
+func (botcmdworker *BotCmdWorker) AddCache(messageID int, chatID int64, clause *cypress.SearchClause) {
+    key := fmt.Sprintf("%d:%d", chatID, messageID)
+    botcmdworker.QueryCache[key] = clause
+}
+
+func (botcmdworker *BotCmdWorker) GetFromCache(messageID int, chatID int64) *cypress.SearchClause {
+    key := fmt.Sprintf("%d:%d", chatID, messageID)
+    return botcmdworker.QueryCache[key]
+}
+
+func (botcmdworker *BotCmdWorker) DelCache(messageID int, chatID int64) {
+    key := fmt.Sprintf("%d:%d", chatID, messageID)
+    delete(botcmdworker.QueryCache, key)
+    fmt.Println("del cache: %s",key)
+    fmt.Println(botcmdworker.QueryCache)
+}
 
 // TGBotCommand telegram bot command processor
-func TGBotButtonQuery(tgservice *service.Telegram, conf *TGBotCommandConf, cypressapi *cypress.API, query *tgbotapi.CallbackQuery) {
-    fmt.Println("====query button")
-    fmt.Println(query.Data)
-    fmt.Println(query.Message.MessageID)
-
+func (botcmdworker *BotCmdWorker) TGBotButtonQuery(tgservice *service.Telegram, conf *TGBotCommandConf, cypressapi *cypress.API, query *tgbotapi.CallbackQuery) {
     callbackcmd := strings.Split(query.Data, "_")
-    if len(callbackcmd) >=3 {
-        fmt.Println("callback type:")
-        fmt.Println(callbackcmd[0])
+    if len(callbackcmd) >=2{
         switch callbackcmd[0] {
             case "P":
-                if len(callbackcmd) ==4 {
-                    pageCount,_ := strconv.Atoi(callbackcmd[3])
-                    currentPage,_ := strconv.Atoi(callbackcmd[2])
-                    if callbackcmd[1] == "N" && currentPage < pageCount-1 {
-                        fmt.Println("pagineation...Next page", currentPage+1)
-                        //replymsg := runSearch(message.Text[3:], currentPage, message.Chat.ID, message.MessageID, conf, cypressapi)
-                    }
-                }
+                    start,_ := strconv.Atoi(callbackcmd[1])
+                    editmsg := botcmdworker.runSearchWithPaging(query.Message.Chat.ID, query.Message.MessageID, start, cypressapi)
+					tgservice.Bot.Send(editmsg)
             default:
 				glog.V(2).Infof("Unknown Query: %v", query)
         }
     }
 }
 
-func runSearch(querystring string, page int, chatID int64, messageID int, conf *TGBotCommandConf, cypressapi *cypress.API) (message *tgbotapi.MessageConfig) {
+func (botcmdworker *BotCmdWorker) runSearch(querystring string, page int, chatID int64, messageID int, conf *TGBotCommandConf, cypressapi *cypress.API) (*tgbotapi.MessageConfig, *cypress.SearchClause) {
     num := conf.ResultPerPage
     start := page * conf.ResultPerPage
     queryword := querystring
@@ -101,22 +118,12 @@ func runSearch(querystring string, page int, chatID int64, messageID int, conf *
     restrict["cy_tenantid"]=tenantid
     clause := &cypress.SearchClause{Queryword: queryword, Conf: "default", Start:start, Num:num, Restrict:&restrict, Params:&params}
 
-    result,err := cypressapi.SearchWithClause(clause, chatID)
-    fmt.Println(result)
-//type SearchClause struct {
-//    Queryword string
-//    Conf string
-//    Start int
-//    Num int
-//    Restrict map[string]string
-//    Params map[string]string
-//}
 
-    //result, err := cypressapi.Search(queryword , start, num , chatID)
+    result,err := cypressapi.SearchWithClause(clause, chatID)
     if err != nil {
         glog.Errorf("cypressapi Search error: %v\n", err)
     }
-    outputresult := FormatSearchResult(result, conf.ResultPerPage)
+    outputresult := FormatSearchResult(clause.Start , result, conf.ResultPerPage)
     replymsg := tgbotapi.NewMessage(chatID, outputresult)
     replymsg.ReplyToMessageID = messageID
     replymsg.ParseMode = "HTML"
@@ -125,34 +132,63 @@ func runSearch(querystring string, page int, chatID int64, messageID int, conf *
     fmt.Printf(" currentpage : %d , all page count: %d \n", page, pageCount)
     if result.Count > conf.ResultPerPage { //show pagination
         pageCount = int(math.Ceil(float64(result.Count) / float64(conf.ResultPerPage)))
-        inlinekeyboard := makePaginationKeyboard(pageCount, page)
+        inlinekeyboard := makePaginationKeyboard(result.Count, clause)
         replymsg.ReplyMarkup = inlinekeyboard
     }
-    return &replymsg
+    return &replymsg, clause
 }
 
 
+//(*tgbotapi.MessageConfig)
+func (botcmdworker *BotCmdWorker) runSearchWithPaging(chatID int64, messageID int, start int, cypressapi *cypress.API) *tgbotapi.EditMessageTextConfig {
+    clause := botcmdworker.GetFromCache(messageID, chatID)
+    clause.Start = start
+    result,err := cypressapi.SearchWithClause(clause, chatID)
+    if err != nil {
+        glog.Errorf("cypressapi Search error: %v\n", err)
+    }
+    outputresult := FormatSearchResult(clause.Start, result, clause.Num)
+    inlinekeyboard := makePaginationKeyboard(result.Count, clause)
+	editmsg := tgbotapi.EditMessageTextConfig{
+		BaseEdit: tgbotapi.BaseEdit{
+			ChatID:    chatID,
+			MessageID: messageID,
+			ReplyMarkup: &inlinekeyboard,
+		},
+		ParseMode: "HTML",
+		Text: outputresult,
+	}
+
+	return &editmsg
+}
+
 // TGBotCommand telegram bot command processor
-func TGBotCommand(tgservice *service.Telegram, conf *TGBotCommandConf, cypressapi *cypress.API, message *tgbotapi.Message) {
+func (botcmdworker *BotCmdWorker) TGBotCommand(tgservice *service.Telegram, conf *TGBotCommandConf, cypressapi *cypress.API, message *tgbotapi.Message) {
 	if strings.HasPrefix(message.Text , "/s ") == true {
         currentPage := 0
-        replymsg := runSearch(message.Text[3:], currentPage, message.Chat.ID, message.MessageID, conf, cypressapi)
+        replymsg, clause := botcmdworker.runSearch(message.Text[3:], currentPage, message.Chat.ID, message.MessageID, conf, cypressapi)
         msg, err := tgservice.Bot.Send(replymsg)
         if err != nil{
 	        glog.Errorf("Telegram Send message error: %v\n", err)
         } else {
+            botcmdworker.AddCache(msg.MessageID, msg.Chat.ID, clause)
             glog.V(3).Infof("Start the delete timer : %d on chatID %d MessageId %d", conf.DeleteAfterSeconds, msg.Chat.ID, msg.MessageID)
-            TimerDeleteMessage(conf.DeleteAfterSeconds, func(){deleteMessage(tgservice, msg.Chat.ID, msg.MessageID)})
+            TimerDeleteMessage(conf.DeleteAfterSeconds, func(){deleteMessage(tgservice, msg.Chat.ID, msg.MessageID); botcmdworker.DelCache(msg.MessageID, msg.Chat.ID)})
         }
     }
 }
 
 // FormatSearchResult format the search result and build the message text for telegram reply
-func FormatSearchResult(result *cypress.Result, resultPerPage int) string {
+func FormatSearchResult(start int, result *cypress.Result, resultPerPage int) string {
     builder := strings.Builder{}
     if len(result.Items) ==0 {
         return "No results found."
     }
+	if result.Count ==1 {
+		builder.WriteString("(1) result\n")
+	} else {
+		builder.WriteString(fmt.Sprintf("(%d) results\n", result.Count))
+	}
     for idx , item := range result.Items {
         if idx >= resultPerPage {
             break
@@ -177,7 +213,7 @@ func FormatSearchResult(result *cypress.Result, resultPerPage int) string {
             tagline += " - " + humanTimestr
         }
 
-        itemstr := fmt.Sprintf("%d. %s %s \n", idx, title, tagline)
+        itemstr := fmt.Sprintf("%d. %s %s\n", start + idx + 1, title, tagline)
         builder.WriteString(itemstr)
     }
 
@@ -185,23 +221,21 @@ func FormatSearchResult(result *cypress.Result, resultPerPage int) string {
 }
 
 // makePaginationKeyboard make a Pagination keyboard
-func makePaginationKeyboard(pageCount int, currentPage int) tgbotapi.InlineKeyboardMarkup {
+func makePaginationKeyboard(resultCount int, clause *cypress.SearchClause) tgbotapi.InlineKeyboardMarkup {
 	var keyboard [][]tgbotapi.InlineKeyboardButton
 	var row []tgbotapi.InlineKeyboardButton
 
-    labelPrev := "<<"
-    if currentPage == 0 {
-        labelPrev = ""
+	if clause.Start - clause.Num >= 0 { //prev button
+        labelPrev := "<<"
+	    buttonPrev := tgbotapi.NewInlineKeyboardButtonData(labelPrev, fmt.Sprintf("P_%d", clause.Start - clause.Num))
+	    row = append(row, buttonPrev)
     }
-	buttonPrev := tgbotapi.NewInlineKeyboardButtonData(labelPrev, fmt.Sprintf("P_P_%d_%d", currentPage, pageCount))
-	row = append(row, buttonPrev)
+    if clause.Start + clause.Num < resultCount { //next button
+        labelNext := ">>"
+	    buttonNext := tgbotapi.NewInlineKeyboardButtonData(labelNext, fmt.Sprintf("P_%d", clause.Start + clause.Num))
+	    row = append(row, buttonNext)
+    }
 
-    labelNext := ">>"
-    if currentPage == pageCount-1 {
-        labelNext = ""
-    }
-	buttonNext := tgbotapi.NewInlineKeyboardButtonData(labelNext, fmt.Sprintf("P_N_%d_%d", currentPage, pageCount))
-	row = append(row, buttonNext)
 	keyboard = append(keyboard, row)
 	return tgbotapi.InlineKeyboardMarkup{
 		InlineKeyboard: keyboard,
