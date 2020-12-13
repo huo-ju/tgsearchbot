@@ -105,7 +105,10 @@ func (botcmdworker *BotCmdWorker) TGBotButtonQuery(tgservice *service.Telegram, 
                         } else {
 				            glog.V(2).Infof("Other users %d click the button, ignore.", queryFromID)
                         }
-                    }
+		    } else {
+			alert := tgbotapi.NewCallbackWithAlert(query.ID, "别瞎点")
+                	go t.botAPI.AnswerCallbackQuery(alert)
+		    }
             default:
 				glog.V(2).Infof("Unknown Query: %v", query)
         }
