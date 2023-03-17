@@ -160,6 +160,7 @@ func (botcmdworker *BotCmdWorker) runSearch(querystring string, page int, chatID
 	replymsg := tgbotapi.NewMessage(chatID, outputresult)
 	replymsg.ReplyToMessageID = messageID
 	replymsg.ParseMode = "HTML"
+	replymsg.DisableWebPagePreview = true
 	//pagination counting
 	pageCount := 1
 	fmt.Printf(" currentpage : %d , all page count: %d \n", page, pageCount)
@@ -171,7 +172,7 @@ func (botcmdworker *BotCmdWorker) runSearch(querystring string, page int, chatID
 	return &replymsg, clause
 }
 
-//(*tgbotapi.MessageConfig)
+// (*tgbotapi.MessageConfig)
 func (botcmdworker *BotCmdWorker) runSearchWithPaging(chatID int64, messageID int, fromID int, start int, cypressapi *cypress.API) *tgbotapi.EditMessageTextConfig {
 	clause := botcmdworker.GetFromCache(messageID, chatID)
 	if clause == nil {
